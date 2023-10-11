@@ -1,6 +1,12 @@
+#define MIN(a,b) (((a)<(b))?(a):(b))
+#define MAX(a,b) (((a)>(b))?(a):(b))
+
 #include <time.h>
 #include <math.h>
 #include <stdlib.h>
+#include <stdio.h>
+
+void calcula_acel(float *acel, float *X, float *U);
 
 // Physical constants
 float m1 = 2.2, m2 = 2.2; // Arm mass
@@ -15,68 +21,72 @@ float Km1, Km2, Km3, Km4, Km5;
 float Kg1, Kg2;
 float Kh1, Kh2;
 
-float dt = 0.1; // Time between iterations [s]
+float dt = 0.0001; // Time between iterations [s]
 
 int main(void){
     Km1 = I1 + I2 + m1*l1*l1 + (m2+mp)*L1*L1 + m2*(l2*l2+L2*L2);
     Km2 = 2*L1*(m2*l2+mp*L2);
-    Km3 = I2 + m2*l2*l2;
-    Km4 = mp*L2*L2+L1*(m2*l2+mp*L2);
+    Km3 = I2 + m2*l2*l2 + mp*L2*L2;
+    Km4 = L1*(m2*l2+mp*L2);
     Km5 = I2 + m2*l2*l2 + mp*L2*L2;
 
     Kg1 = (m1*l1 + (m2+mp)*L1)*g;
     Kg2 = (m2*l2 + mp*L1)*g;
 
-    Kh1 = L1*(m2*l2 + mp*L2);
-    Kh2 = Kh1;
+    Kh1 = -L1*(m2*l2 + mp*L2);
+    Kh2 = -Kh1;
 
-    float X[4] = {0,0,0,0};
+    // float X[4] = {-M_PI_2,0,0,0};
+    float X[4] = {M_PI/4,0,0,0};
     float U[2] = {0,0};
-    float *acel;
+    float acel[1];
 
     while(1){
-        acel = calcula_acel(X, U);
+        calcula_acel(acel, X, U);
         
         // Friction
-        acel[1] = (acel[1]>0) ? max(acel[1]-X[2]*ka1,0) : min(acel[1]-X[2]*ka1,0);
-        acel[2] = (acel[2]>0) ? max(acel[2]-X[4]*ka2,0) : min(acel[2]-X[4]*ka2,0);
+        acel[0] = (acel[0]>0) ? MAX(acel[0]-X[1]*ka1,0) : MIN(acel[0]-X[1]*ka1,0);
+        acel[1] = (acel[1]>0) ? MAX(acel[1]-X[3]*ka2,0) : MIN(acel[1]-X[3]*ka2,0);
 
         // Updates angular speed
-        X[2] = X[2] + acel[1]*dt;
-        X[4] = X[4] + acel[2]*dt;
+        X[1] = X[1] + acel[0]*dt;
+        X[3] = X[3] + acel[1]*dt;
 
         // Updates angular position
-        X[1] = X[1] + X[2]*dt;
-        X[3] = X[3] + X[4]*dt;
+        X[0] = X[0] + X[1]*dt;
+        X[2] = X[2] + X[3]*dt;
 
-        printf("Posição 1: %d, Posição 2: %d\n", X[1], X[4]);
-        sleep(round(dt*1000));
+        printf("Posição 1: %f, Posição 2: %f, Aceleração 1: %f, Aceleração 2: %f\n", X[0], X[2], acel[0], acel[1]);
+        _sleep(100);
 
     }
 }
 
-float *calcula_acel(float *X, float *U){
+void calcula_acel(float *acel, float *X, float *U){
     float M[2][2];
     float G[2];
     float H[2];
 
-    M[1][1] = Km1 + Km2*cos(X[3]);
-    M[1][2] = Km3 + Km4*cos(X[3]);
-    M[2][1] = M[1][2];
-    M[2][2] = Km5;
+    M[0][0] = Km1 + Km2*cos(X[2]);
+    M[0][1] = Km3 + Km4*cos(X[2]);
+    M[1][0] = M[0][1];
+    M[1][1] = Km5;
 
-    G[2] = Kg2*cos(X[1] + X[3]);
-    G[1] = Kg1*cos(X[1]) + G[2];
+    G[1] = Kg2*cos(X[0] + X[2]);
+    G[0] = Kg1*cos(X[0]) + G[1];
 
-    H[1] = -Kh1*sin(X[3])*(2*X[2]*X[4] + X[4]*X[4]) + G[1];
-    H[2] = Kh1*sin(X[3])*X[2]*X[2] + G[2];
+    H[0] = Kh1*sin(X[2])*(2*X[1]*X[3] + X[3]*X[3]) + G[0];
+    H[1] = Kh2*sin(X[2])*X[1]*X[1] + G[1];
 
-    
+    H[0] = abs(H[0])<1e-5 ? 0 : H[0];
+    H[1] = abs(H[0])<1e-5 ? 0 : H[1];
 
-    float acel[2];
-    acel[2] = (U[2]-H[2]-(U[1]-H[1])*M[2][1])/(M[2][2]-M[1][2]*M[1][2]/M[1][1]);
-    acel[1] = (U[1]-H[1])/M[1][1]-acel[2]*M[1][2]/M[1][1];
-    return acel;
+    acel[1] = (U[1]-H[1]-(U[0]-H[0])*M[1][0])/(M[1][1]-M[0][1]*M[0][1]/M[0][0]);
+    // acel[1] = (U[1]-H[1]-(U[0]-H[0])*M[1][0])*M[0][0]/(M[1][1]*M[0][0]-M[1][0]);
+
+    acel[0] = (U[0]-H[0])/M[0][0]-acel[1]*M[0][1]/M[0][0];
+
+
 }
 
 
