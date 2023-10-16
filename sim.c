@@ -46,11 +46,18 @@ int main(void){
         
         // Friction
         acel[0] = (acel[0]>0) ? MAX(acel[0]-X[1]*ka1,0) : MIN(acel[0]-X[1]*ka1,0);
-        acel[1] = (acel[1]>0) ? MAX(acel[1]-X[3]*ka2,0) : MIN(acel[1]-X[3]*ka2,0);
+        acel[1] = (acel[1]>0) ? MAX(acel[1]-X[3]*ka2,0) : MIN(acel[1]-X[3]*ka2,0); 
+
+        // Saturation
+        acel[0] = (abs(acel[0])>50) ? 50*acel[0]/abs(acel[0]) : acel[0];
+        acel[1] = (abs(acel[1])>50) ? 50*acel[1]/abs(acel[1]) : acel[1];
 
         // Updates angular speed
         X[1] = X[1] + acel[0]*dt;
         X[3] = X[3] + acel[1]*dt;
+
+        X[0] = (abs(X[0])>50) ? 50*X[0]/abs(X[0]) : X[0];
+        X[2] = (abs(X[2])>50) ? 50*X[2]/abs(X[2]) : X[2];
 
         // Updates angular position
         X[0] = X[0] + X[1]*dt;
